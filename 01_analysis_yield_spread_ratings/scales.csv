@@ -1,0 +1,25 @@
+Moody's;S&Poor's;Fitch
+Aaa;AAA;AAA
+Aa1;AA+;AA+
+Aa2;AA;AA
+Aa3;AA-;AA-
+A1;A+;A+
+A2;A;A
+A3;A-;A-
+Baa1;BBB+;BBB+
+Baa2;BBB;BBB
+Baa3;BBB-;BBB-
+Ba1;BB+;BB+
+Ba2;BB;BB
+Ba3;BB-;BB-
+B1;B+;B+
+B2;B;B
+B3;B-;B-
+Caa1;CCC+;CCC
+Caa2;CCC;DDD
+Caa3;CCC-;DD
+Ca;CC;D
+C;C;Not Rated
+Not Rated;D;NA
+NA;Not Rated;NA
+NA;SD;NA

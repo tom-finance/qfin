@@ -1,0 +1,265 @@
+---
+title: |
+  | \vspace{2cm} \textbf{Performanceanalyse Pensionsfonds} \vspace{1cm}
+author: | 
+  | \textsc{Thomas Ludwig}
+  | Thomas.Ludwig95@gmail.com
+date: |
+  | `r format(Sys.time(), '%d. %B %Y')` \vspace{1cm}
+output: 
+  pdf_document:
+    number_sections: true
+    fig_caption: true
+header-includes:
+- \usepackage{graphicx}
+- \usepackage[english]{babel}
+- \usepackage{xcolor}
+- \usepackage{booktabs}
+- \usepackage[]{microtype}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage{wrapfig}
+- \usepackage{float}
+- \usepackage{pdflscape}
+- \usepackage{tabu}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+- \usepackage[hang, small, bf, margin=20pt, tableposition=top]{caption}
+- \setlength{\abovecaptionskip}{0pt}
+fontsize: 12pt
+spacing: double
+geometry: margin=1in
+documentclass: "article"
+abstract: |
+  In diesem Artikel wird die Performance des Raiffeisen Pensionsfonds mit
+  verschiedenen statistischen Kennzahlen analysiert.
+---
+
+\newpage
+
+\tableofcontents
+
+\listoffigures
+
+\listoftables
+
+\newpage
+
+```{r setup, include=FALSE}
+
+# in this section we define the setup for the report
+
+# define global knitr options
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.pos = 'H') # needed to hold plot position with captions
+knitr::opts_chunk$set(fig.width=12, fig.height=8) # define global plot dimensions
+
+# used packages for analysis
+library(PerformanceAnalytics)
+library(rvest)
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(tidyquant)
+library(timetk)
+library(tidyr)
+library(tibbletime)
+library(kableExtra)
+
+# read all tables from website into R
+content <- read_html("http://www.raiffeisenpensionsfonds.it/nc/offener-pensionsfonds/finanz-verwaltung/wert-der-anteile/nav-investitionslinie-dynamic.html?tx_rolstockgraph_pi1%5Byear%5D=all") %>%
+  html_table()
+
+# construct price table
+price_dynamic <- rbind(content[[1]],
+                       content[[2]],
+                       content[[3]]) %>%
+  filter(row_number() %% 2 == 1) # filter only values from end of month!
+
+
+# data cleansing
+price_dynamic$Wert <- as.numeric(gsub(",", ".", gsub("\\.", "", price_dynamic$Wert)))
+price_dynamic$Datum <- as.Date(price_dynamic$Datum, "%d.%m.%Y")
+
+colnames(price_dynamic) <- c("Datum", "Fund_Dynamic")
+
+
+# load price data from aktivity fund
+content <- read_html("http://www.raiffeisenpensionsfonds.it/nc/offener-pensionsfonds/finanz-verwaltung/wert-der-anteile/nav-investitionslinie-activity.html?tx_rolstockgraph_pi1%5Byear%5D=all") %>%
+  html_table()
+
+# construct price table
+price_activity <- rbind(content[[1]],
+                        content[[2]],
+                        content[[3]]) %>%
+  filter(row_number() %% 2 == 1) # filter only values from end of month!
+
+# data cleansing
+price_activity$Wert <- as.numeric(gsub(",", ".", gsub("\\.", "", price_activity$Wert)))
+price_activity$Datum <- as.Date(price_activity$Datum, "%d.%m.%Y")
+
+colnames(price_activity) <- c("Datum", "Fund_Aktivity")
+
+
+# load DAX data for comparison
+DAX_tidy <- tq_get("^GDAXI", from = "2005-11-30") %>%
+  as_tbl_time(date) %>%
+  filter(complete.cases(.)) %>% # delete NA values
+  as_period("monthly", side = "end") %>%
+  filter(date < tail(price_dynamic$Datum, 1)+1) %>% # match DAX data
+  select(date, close)
+
+# replace dates of last of month with date used in fund data for merging correctly
+DAX_tidy$date <- price_activity$Datum
+
+colnames(DAX_tidy) <- c("Datum", "DAX")
+
+# join to one data frame
+price_all <- left_join(price_activity, price_dynamic)
+price_all <- left_join(price_all, DAX_tidy)
+
+
+########################
+
+# create xts object
+price_all_xts <- xts(price_all[, -1], order.by = price_all$Datum)
+
+# calculate returns (in this case discrete returns for monthly series)
+returns_all <- Return.calculate(price_all_xts, method = "discrete")
+
+
+man.len <- dim(returns_all)[1]
+trailing12.rows = ((man.len - 11):man.len)
+trailing36.rows = ((man.len - 35):man.len)
+trailing60.rows = ((man.len - 59):man.len)
+trailing120.rows = ((man.len - 119):man.len)
+
+```
+
+# Performance
+
+Annualisierte Rendite Full Sample
+
+```{r, echo=FALSE}
+
+kable(Return.annualized(returns_all, scale = 12)*100
+, "latex", booktabs = T, caption = "Rendite") %>%
+  kable_styling(position = "center", latex_options = "hold_position")
+
+
+```
+
+```{r, echo=FALSE}
+
+kable(table.Variability(returns_all)
+, "latex", booktabs = T, caption = "Variabilität") %>%
+  kable_styling(position = "center", latex_options = "hold_position")
+
+```
+
+```{r, echo=FALSE}
+
+kable(DownsideFrequency(returns_all, MAR = 0.0)
+, "latex", booktabs = T, caption = "Downside Frequency") %>%
+  kable_styling(position = "center", latex_options = "hold_position")
+
+```
+
+```{r, echo=FALSE}
+
+kable(table.Stats(returns_all)
+, "latex", booktabs = T, caption = "Statistiken") %>%
+  kable_styling(position = "center", latex_options = "hold_position")
+
+```
+
+
+```{r, echo=FALSE}
+
+charts.PerformanceSummary(returns_all,
+                          wealth.index = TRUE, begin = "first", grid.color = "white")
+```
+
+
+Vergleich Performance für verschiedene Zeiträume
+
+```{r, echo=FALSE}
+
+par(mfrow = c(2,2))
+chart.CumReturns(returns_all[, ], legend.loc = "topleft", main = "Full Sample", grid.color = "white", cex.legend = 0.5)
+chart.CumReturns(returns_all[trailing120.rows, ], legend.loc = "topleft", main = "Last 10 Years", grid.color = "white", cex.legend = 0.5)
+chart.CumReturns(returns_all[trailing60.rows, ], legend.loc = "topleft", main = "Last 5 Years", grid.color = "white", cex.legend = 0.5)
+chart.CumReturns(returns_all[trailing12.rows, ], legend.loc = "bottomleft", main = "Last Year", grid.color = "white", cex.legend = 0.5)
+par(mfrow = c(1,1))
+
+```
+
+
+
+
+```{r, echo=F}
+
+test <- table.CalendarReturns(returns_all, digits = 2, as.perc = TRUE)
+
+kable(test[, c(13:15)]
+, "latex", booktabs = T, caption = "Renditevergleich") %>%
+  kable_styling(position = "center", latex_options = "hold_position")
+
+```
+
+
+
+```{r, echo=FALSE}
+
+chart.Boxplot(returns_all, sort.by = 'median')
+
+```
+
+
+```{r, echo=FALSE}
+
+par(mfrow = c(2,2))
+chart.Histogram(returns_all[,1,drop=FALSE],
+                main = colnames(returns_all[,2]),
+                methods = c("add.risk", "add.rug", "add.normal"))
+
+chart.Histogram(returns_all[,2,drop=FALSE],
+                main = colnames(returns_all[,2]),
+                methods = c("add.risk", "add.rug", "add.normal"))
+
+chart.Histogram(returns_all[,3,drop=FALSE],
+                main = colnames(returns_all[,2]),
+                methods = c("add.risk", "add.rug", "add.normal"))
+par(mfrow = c(1,1))
+
+
+```
+
+
+```{r, echo=FALSE}
+
+par(mfrow = c(1,2))
+chart.RiskReturnScatter(returns_all[, ], Rf = 0, method = "calc", scale = 12, main = "Full Sample")
+chart.RiskReturnScatter(returns_all[trailing120.rows, ], Rf = 0, method = "calc", scale = 12, main = "Last 10 years")
+par(mfrow = c(1,1))
+
+
+```
+
+
+```{r, echo=FALSE}
+
+chart.SnailTrail(returns_all,
+                 add.names="firstandlast",
+                 rf=0,
+                 main="Risk Return Over Time",
+                 legend.loc = "topleft")
+```
+
+```{r, echo=FALSE}
+chart.RollingPerformance(returns_all, grid.color = "white", legend.loc = "topleft")
+```
+
