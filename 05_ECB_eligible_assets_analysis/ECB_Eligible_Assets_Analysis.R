@@ -12,6 +12,11 @@ library(ggplot2)
 # http://doc989.consiglioveneto.it/oscc/resources/ecb_2018_4_f_sign.pdf
 # https://www.ecb.europa.eu/paym/coll/risk/liquidity/html/index.en.html
 
+# Decoding Coupon Definition:
+# fixed coupon (incl. inflation linked bonds): COUPON_DEFINITION: CD4
+# zero coupon: COUPON_DEFINITION: CD1
+# floating: COUPON_DEFINITION: CD1
+
 
 # target website for automated download
 # https://www.ecb.europa.eu/paym/coll/assets/html/list-MID.en.html
@@ -32,19 +37,44 @@ data$ISSUANCE_DATE <- as.Date(data$ISSUANCE_DATE, "%d/%m/%Y")
 data$MATURITY_DATE <- as.Date(data$MATURITY_DATE, "%d/%m/%Y")
 
 
-a <- data %>%
-  filter(ISSUANCE_DATE == min(ISSUANCE_DATE))
+data$RUNNING_TIME_YEARS <- as.numeric(difftime(data$MATURITY_DATE, 
+                                               data$ISSUANCE_DATE, 
+                                               unit="weeks"))/52.25
 
-min(data$ISSUANCE_DATE)
+data$REMAINING_TIME_YEARS <- as.numeric(difftime(data$MATURITY_DATE, 
+                                                 Sys.Date(), 
+                                                 unit="weeks"))/52.25
+
+
+
+# create time buckets running time years and remaining time years
+data <- data %>%
+  mutate(time_bucket_running = case_when(
+    RUNNING_TIME_YEARS <= 1 ~ "<1Y",
+    RUNNING_TIME_YEARS > 1 & RUNNING_TIME_YEARS <= 5 ~ ">1-5Y",
+    RUNNING_TIME_YEARS > 5 & RUNNING_TIME_YEARS <= 10 ~ ">5-10Y",
+    RUNNING_TIME_YEARS > 10 ~ ">10Y"
+  )
+) %>%
+  mutate(time_bucket_remaining = case_when(
+    REMAINING_TIME_YEARS <= 1 ~ "<1Y",
+    REMAINING_TIME_YEARS > 1 & REMAINING_TIME_YEARS <= 5 ~ ">1-5Y",
+    REMAINING_TIME_YEARS > 5 & REMAINING_TIME_YEARS <= 10 ~ ">5-10Y",
+    REMAINING_TIME_YEARS > 10 ~ ">10Y"
+  )
+)
+
+# plot some results
+plot(as.factor(data$time_bucket_remaining))
 
 ##########################
 
-substring(data$ISSUANCE_DATE,7,10)
 
 data$ISSUANCE_DATE_YEAR <- as.numeric(format(data$ISSUANCE_DATE,"%Y"))
 
 coupon <- data %>%
   filter(!is.na(COUPON_RATE....)) %>%
+  filter(COUPON_DEFINITION == "CD4") %>% # use only fixed rate instruments
   filter(ISSUANCE_DATE_YEAR > 1990) %>%
   group_by(ISSUANCE_DATE_YEAR) %>%
   summarise(m = mean(COUPON_RATE....))
@@ -93,6 +123,7 @@ supranational <- data %>%
 
 coupon_issuer <- data %>%
   #filter(TYPE == "AT01") %>% # consider only bonds for plot
+  filter(COUPON_DEFINITION == "CD4") %>% # consider only fixed rate bonds
   filter(!is.na(COUPON_RATE....)) %>% # exclude records without coupon rate
   filter(ISSUANCE_DATE_YEAR > 1990) %>%
   group_by(ISSUANCE_DATE_YEAR, ISSUER_GROUP) %>%
