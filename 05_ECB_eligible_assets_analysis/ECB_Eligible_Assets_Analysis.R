@@ -31,7 +31,7 @@ link <- read_html("https://www.ecb.europa.eu/paym/coll/assets/html/list-MID.en.h
 data <- read.csv(link, skipNul = TRUE, sep = '\t',header = TRUE, fileEncoding = "UTF-16LE")
 
 ################################################################################
-
+# data manipulation and preperation
 
 data$ISSUANCE_DATE <- as.Date(data$ISSUANCE_DATE, "%d/%m/%Y")
 data$MATURITY_DATE <- as.Date(data$MATURITY_DATE, "%d/%m/%Y")
@@ -44,7 +44,6 @@ data$RUNNING_TIME_YEARS <- as.numeric(difftime(data$MATURITY_DATE,
 data$REMAINING_TIME_YEARS <- as.numeric(difftime(data$MATURITY_DATE, 
                                                  Sys.Date(), 
                                                  unit="weeks"))/52.25
-
 
 
 # create time buckets running time years and remaining time years
@@ -66,11 +65,41 @@ data <- data %>%
 
 # plot some results
 plot(as.factor(data$time_bucket_remaining))
-
-##########################
-
+plot(as.factor(data$time_bucket_running))
 
 data$ISSUANCE_DATE_YEAR <- as.numeric(format(data$ISSUANCE_DATE,"%Y"))
+
+################################################################################
+
+# some data analysis
+
+# let's have a loom on govis bonds in 2020 issued with fixed coupon
+
+data_govis_2020 <- data %>%
+  filter(ISSUANCE_DATE_YEAR == 2020) %>%
+  filter(COUPON_DEFINITION == "CD4") %>%
+  filter(ISSUER_GROUP == "IG2") %>%
+  arrange(desc(COUPON_RATE....)) %>%
+  select(ISIN_CODE, ISSUER_NAME, COUPON_RATE...., RUNNING_TIME_YEARS,
+         DENOMINATION, ISSUANCE_DATE, MATURITY_DATE, HAIRCUT, TYPE)
+
+
+data_all_2020 <- data %>%
+  filter(ISSUANCE_DATE_YEAR == 2020) %>%
+  filter(COUPON_DEFINITION == "CD4") %>%
+  arrange(desc(COUPON_RATE....)) %>%
+  #filter(TYPE == "AT01") %>%
+  select(ISIN_CODE, ISSUER_NAME, COUPON_RATE...., time_bucket_running,
+         DENOMINATION, ISSUANCE_DATE, MATURITY_DATE, HAIRCUT, TYPE)
+
+data_all_2020 <- data %>%
+  filter(ISSUANCE_DATE_YEAR == 2020) %>%
+  filter(COUPON_DEFINITION == "CD4") %>%
+  arrange(desc(ISSUANCE_DATE)) %>%
+  #filter(TYPE == "AT01") %>%
+  select(ISIN_CODE, ISSUER_NAME, COUPON_RATE...., time_bucket_running,
+         DENOMINATION, ISSUANCE_DATE, MATURITY_DATE, HAIRCUT, TYPE)
+
 
 coupon <- data %>%
   filter(!is.na(COUPON_RATE....)) %>%
