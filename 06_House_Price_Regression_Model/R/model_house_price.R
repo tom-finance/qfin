@@ -115,7 +115,7 @@ exp(pred.full)
 
 # write function to calculate the prediction error
 prediction_error <- function(y_pred, y_true) {
-  pe <- sum((log(y_pred) - log(y_true))^2)/length(y_pred)
+  pe <- (sum((log(y_pred) - log(y_true))^2)/length(y_pred))^(0.5)
   return(pe)
 }
 
